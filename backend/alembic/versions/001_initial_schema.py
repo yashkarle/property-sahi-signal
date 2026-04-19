@@ -15,21 +15,11 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # Enums
-    op.execute("CREATE TYPE source_enum AS ENUM ('daft', 'myhome')")
-    op.execute("CREATE TYPE property_type_enum AS ENUM ('apartment', 'duplex', 'house', 'own_door_apartment')")
-    op.execute("CREATE TYPE heating_type_enum AS ENUM ('gas', 'oil', 'electric_storage', 'heat_pump', 'unknown')")
-    op.execute("CREATE TYPE seller_status_enum AS ENUM ('chain_free', 'turnkey', 'renting', 'living', 'unknown')")
-    op.execute("CREATE TYPE bid_session_status_enum AS ENUM ('active', 'won', 'lost', 'withdrawn')")
-    op.execute("CREATE TYPE bid_submitter_enum AS ENUM ('user', 'other_buyer')")
-    op.execute("CREATE TYPE professional_type_enum AS ENUM ('solicitor', 'surveyor')")
-    op.execute("CREATE TYPE professional_source_enum AS ENUM ('scsi', 'engineers_ireland')")
-
-    # properties
+    # properties (SQLAlchemy auto-creates all named enum types on first use)
     op.create_table(
         "properties",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column("source", sa.Enum("daft", "myhome", name="source_enum"), nullable=False),
+        sa.Column("source", sa.Enum("daft", "myhome", name="source_enum", create_type=True), nullable=False),
         sa.Column("source_id", sa.String(128), nullable=False),
         sa.Column("url", sa.String(1024), unique=True, nullable=False),
         sa.Column("title", sa.String(512)),
@@ -43,13 +33,13 @@ def upgrade() -> None:
         sa.Column("bedrooms", sa.Integer),
         sa.Column("bathrooms", sa.Integer),
         sa.Column("carpet_area_sqm", sa.Integer),
-        sa.Column("property_type", sa.Enum("apartment", "duplex", "house", "own_door_apartment", name="property_type_enum")),
+        sa.Column("property_type", sa.Enum("apartment", "duplex", "house", "own_door_apartment", name="property_type_enum", create_type=True)),
         sa.Column("ber_rating", sa.String(4)),
-        sa.Column("heating_type", sa.Enum("gas", "oil", "electric_storage", "heat_pump", "unknown", name="heating_type_enum")),
+        sa.Column("heating_type", sa.Enum("gas", "oil", "electric_storage", "heat_pump", "unknown", name="heating_type_enum", create_type=True)),
         sa.Column("year_built", sa.Integer),
         sa.Column("management_fee_eur", sa.Integer),
         sa.Column("is_chain_free", sa.Boolean),
-        sa.Column("seller_status", sa.Enum("chain_free", "turnkey", "renting", "living", "unknown", name="seller_status_enum")),
+        sa.Column("seller_status", sa.Enum("chain_free", "turnkey", "renting", "living", "unknown", name="seller_status_enum", create_type=True)),
         sa.Column("is_south_facing", sa.Boolean),
         sa.Column("is_htb_eligible", sa.Boolean),
         sa.Column("days_on_market", sa.Integer),
@@ -124,7 +114,7 @@ def upgrade() -> None:
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
         sa.Column("property_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("properties.id", ondelete="CASCADE")),
         sa.Column("started_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.Column("status", sa.Enum("active", "won", "lost", "withdrawn", name="bid_session_status_enum"), default="active"),
+        sa.Column("status", sa.Enum("active", "won", "lost", "withdrawn", name="bid_session_status_enum", create_type=True), default="active"),
         sa.Column("user_max_budget", sa.Integer),
         sa.Column("strategy_advice", sa.Text),
     )
@@ -135,7 +125,7 @@ def upgrade() -> None:
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
         sa.Column("session_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("bid_sessions.id", ondelete="CASCADE")),
         sa.Column("bid_amount", sa.Integer, nullable=False),
-        sa.Column("submitted_by", sa.Enum("user", "other_buyer", name="bid_submitter_enum"), nullable=False),
+        sa.Column("submitted_by", sa.Enum("user", "other_buyer", name="bid_submitter_enum", create_type=True), nullable=False),
         sa.Column("submitted_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.Column("notes", sa.Text),
         sa.Column("is_winning", sa.Boolean, default=False),
@@ -145,8 +135,8 @@ def upgrade() -> None:
     op.create_table(
         "professionals",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column("professional_type", sa.Enum("solicitor", "surveyor", name="professional_type_enum"), nullable=False),
-        sa.Column("source", sa.Enum("scsi", "engineers_ireland", name="professional_source_enum"), nullable=False),
+        sa.Column("professional_type", sa.Enum("solicitor", "surveyor", name="professional_type_enum", create_type=True), nullable=False),
+        sa.Column("source", sa.Enum("scsi", "engineers_ireland", name="professional_source_enum", create_type=True), nullable=False),
         sa.Column("name", sa.String(256)),
         sa.Column("firm_name", sa.String(256)),
         sa.Column("address", sa.String(512)),
