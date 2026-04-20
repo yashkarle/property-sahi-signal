@@ -26,21 +26,30 @@ def _cache_key(prefix: str, data: Any) -> str:
 
 
 async def get_cached(prefix: str, key_data: Any) -> Any | None:
-    key = _cache_key(prefix, key_data)
-    redis = get_redis()
-    value = await redis.get(key)
-    if value:
-        return json.loads(value)
+    try:
+        key = _cache_key(prefix, key_data)
+        redis = get_redis()
+        value = await redis.get(key)
+        if value:
+            return json.loads(value)
+    except Exception:
+        pass
     return None
 
 
 async def set_cached(prefix: str, key_data: Any, value: Any, ttl: int = SEARCH_CACHE_TTL) -> None:
-    key = _cache_key(prefix, key_data)
-    redis = get_redis()
-    await redis.setex(key, ttl, json.dumps(value, default=str))
+    try:
+        key = _cache_key(prefix, key_data)
+        redis = get_redis()
+        await redis.setex(key, ttl, json.dumps(value, default=str))
+    except Exception:
+        pass
 
 
 async def delete_cached(prefix: str, key_data: Any) -> None:
-    key = _cache_key(prefix, key_data)
-    redis = get_redis()
-    await redis.delete(key)
+    try:
+        key = _cache_key(prefix, key_data)
+        redis = get_redis()
+        await redis.delete(key)
+    except Exception:
+        pass

@@ -72,12 +72,13 @@ def get_opensearch_client() -> AsyncOpenSearch:
                 http_auth=("admin", "admin"),
             )
         else:
-            auth = RequestsAWSV4SignerAuth(
-                settings.aws_access_key_id,
-                settings.aws_secret_access_key,
-                settings.aws_default_region,
-                "aoss",
-            )
+            import boto3
+            credentials = boto3.Session(
+                aws_access_key_id=settings.aws_access_key_id,
+                aws_secret_access_key=settings.aws_secret_access_key,
+                region_name=settings.aws_default_region,
+            ).get_credentials()
+            auth = RequestsAWSV4SignerAuth(credentials, settings.aws_default_region, "aoss")
             _client = AsyncOpenSearch(
                 hosts=[settings.opensearch_endpoint],
                 http_auth=auth,
