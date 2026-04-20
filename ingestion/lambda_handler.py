@@ -182,7 +182,7 @@ async def _upsert_ppr_records(pool: asyncpg.Pool, rows: list[dict]) -> int:
                     ) VALUES (
                         $1::uuid, $2, $3, $4, $5::date, $6,
                         $7, $8, $9, $10, $11, NOW()
-                    ) ON CONFLICT DO NOTHING""",
+                    ) ON CONFLICT (address, date_of_sale, price_eur) DO NOTHING""",
                     str(uuid.uuid4()),
                     row["address"], row["eircode"], row["county"],
                     row["date_of_sale"], row["price_eur"],

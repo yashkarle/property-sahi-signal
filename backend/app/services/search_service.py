@@ -17,7 +17,7 @@ async def semantic_search(
 ) -> dict:
     t0 = time.perf_counter()
 
-    cache_key = {"query": request.query, "filters": request.filters.model_dump(), "offset": request.offset}
+    cache_key = {"query": request.query, "filters": request.filters.model_dump(), "offset": request.offset, "limit": request.limit}
     cached = await get_cached("search", cache_key)
     if cached:
         cached["query_time_ms"] = round((time.perf_counter() - t0) * 1000, 1)

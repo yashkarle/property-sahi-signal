@@ -11,9 +11,9 @@ def generate_comparison(properties: list[Property]) -> dict:
     for p in properties:
         summary = f"""
 Property: {p.address or p.title}
-Price: €{p.price:,} | Size: {p.carpet_area_sqm or 'unknown'}sqm | {p.bedrooms}bed/{p.bathrooms}bath
+Price: {f'€{p.price:,}' if p.price else 'unknown'} | Size: {p.carpet_area_sqm or 'unknown'}sqm | {p.bedrooms}bed/{p.bathrooms}bath
 Type: {p.property_type} | BER: {p.ber_rating or 'unknown'} | Heating: {p.heating_type}
-Management fee: €{p.management_fee_eur:,}/yr | Chain-free: {p.is_chain_free}
+Management fee: {f'€{p.management_fee_eur:,}/yr' if p.management_fee_eur else 'N/A'} | Chain-free: {p.is_chain_free}
 Days on market: {p.days_on_market} | Year built: {p.year_built or 'unknown'}
 """
         prop_summaries.append(summary)

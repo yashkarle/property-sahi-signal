@@ -34,7 +34,7 @@ async def compare_properties(request: CompareRequest, db: DbSession, _: AuthDep)
         select(Property).where(Property.id.in_(request.property_ids))
     )
     props = result.scalars().all()
-    if len(props) < 2:
+    if len(props) != len(request.property_ids):
         raise HTTPException(status_code=404, detail="One or more properties not found")
     data = generate_comparison(list(props))
     from app.schemas.property import PropertySummary

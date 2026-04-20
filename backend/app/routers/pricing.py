@@ -61,8 +61,9 @@ async def get_comparables(
         select(PriceModelResult)
         .where(PriceModelResult.property_id == property_id, PriceModelResult.status == "ready")
         .order_by(PriceModelResult.run_at.desc())
+        .limit(1)
     )
-    latest = result.scalar_one_or_none()
+    latest = result.scalars().first()
     if not latest or not latest.comparables_used:
         raise HTTPException(status_code=404, detail="No model results found")
 
@@ -103,8 +104,9 @@ async def get_offer_band(property_id: uuid.UUID, db: DbSession, _: AuthDep) -> d
         select(PriceModelResult)
         .where(PriceModelResult.property_id == property_id, PriceModelResult.status == "ready")
         .order_by(PriceModelResult.run_at.desc())
+        .limit(1)
     )
-    latest = result.scalar_one_or_none()
+    latest = result.scalars().first()
     if not latest:
         raise HTTPException(status_code=404, detail="Run /pricing/analyse first")
     return {
