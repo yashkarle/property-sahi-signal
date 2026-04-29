@@ -1,8 +1,9 @@
-.PHONY: dev test migrate ingest lint format install seed-professionals seed-properties backfill-embeddings help
+.PHONY: dev test migrate ingest lint format install install-ml seed-professionals seed-properties backfill-embeddings help
 
 help:
 	@echo "Usage: make <target>"
-	@echo "  install              - Install all Python dependencies"
+	@echo "  install              - Install core Python dependencies (Python >=3.9)"
+	@echo "  install-ml           - Install ML extras: pymc/scipy/weasyprint (Python >=3.10)"
 	@echo "  dev                  - Start local dev stack (docker compose up)"
 	@echo "  migrate              - Run Alembic migrations"
 	@echo "  test                 - Run pytest suite"
@@ -18,6 +19,9 @@ install:
 	pip install -r ingestion/requirements.txt
 	pip install -r scripts/requirements.txt
 	playwright install chromium
+
+install-ml:
+	pip install -e "backend/[ml]"
 
 dev:
 	docker compose up --build
