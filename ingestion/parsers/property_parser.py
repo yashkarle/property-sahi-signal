@@ -4,7 +4,7 @@ from __future__ import annotations
 import re
 from datetime import datetime, timezone
 
-from ingestion.scrapers.daft_scraper import DaftListing
+from ingestion.scrapers.daft_scraper import ListingData
 
 HEATING_KEYWORDS = {
     "electric storage": "electric_storage",
@@ -22,7 +22,7 @@ YEAR_BUILT_RE = re.compile(r"built\s+(?:in\s+)?(\d{4})|(\d{4})\s+(?:built|build|
 MGMT_FEE_RE = re.compile(r"management\s+fee[:\s]+€?([\d,]+)", re.IGNORECASE)
 
 
-def parse_listing(listing: DaftListing) -> dict:
+def parse_listing(listing: ListingData) -> dict:
     """Convert a scraped DaftListing to a Postgres-ready dict."""
     combined_text = f"{listing.title or ''} {listing.description or ''} {' '.join(listing.features)}"
 
@@ -45,7 +45,7 @@ def parse_listing(listing: DaftListing) -> dict:
         missing_flags.append("bathrooms")
 
     return {
-        "source": "daft",
+        "source": listing.source,
         "source_id": listing.source_id,
         "url": listing.url,
         "title": listing.title,

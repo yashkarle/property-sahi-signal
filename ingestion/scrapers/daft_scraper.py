@@ -27,7 +27,7 @@ DAFT_SEARCH_URL = (
 
 
 @dataclass
-class DaftListing:
+class ListingData:
     source_id: str
     url: str
     title: str
@@ -42,13 +42,18 @@ class DaftListing:
     estate_agent: str | None
     features: list[str] = field(default_factory=list)
     raw_html: str = ""
+    source: str = "daft"
+
+
+# Backwards-compatible alias so Lambda imports keep working
+DaftListing = ListingData
 
 
 async def scrape_daft_search(
     min_price: int = 200000,
     max_price: int = 400000,
     max_pages: int = 10,
-) -> list[DaftListing]:
+) -> list[ListingData]:
     browser = await get_browser()
     listings = []
     try:
@@ -71,7 +76,7 @@ async def scrape_daft_search(
             for listing_url in page_listings:
                 detail_html = await get_page_html(listing_url, browser)
                 if detail_html:
-                    listing = _parse_detail_page(detail_html, listing_url)
+                    listing = parse_daft_listing_html(detail_html, listing_url)
                     if listing:
                         listings.append(listing)
     finally:
@@ -106,7 +111,15 @@ def _parse_search_results(html: str) -> list[str]:
     return urls[:20]
 
 
-def _parse_detail_page(html: str, url: str) -> DaftListing | None:
+async def parse_daft_url(url: str, browser) -> ListingData | None:
+    """Fetch a Daft.ie property URL and parse it. Returns None if HTML is unavailable."""
+    html = await get_page_html(url, browser)
+    if html is None:
+        return None
+    return parse_daft_listing_html(html, url)
+
+
+def parse_daft_listing_html(html: str, url: str) -> ListingData | None:
     """Parse a single Daft.ie property detail page."""
     soup = BeautifulSoup(html, "lxml")
 
@@ -151,7 +164,11 @@ def _parse_detail_page(html: str, url: str) -> DaftListing | None:
     agent_el = soup.find(class_=re.compile(r"agent|estate", re.I))
     estate_agent = agent_el.get_text(strip=True)[:256] if agent_el else None
 
-    return DaftListing(
+    # Return None for empty/unparseable pages
+    if not address and price is None:
+        return None
+
+    return ListingData(
         source_id=source_id_str,
         url=url,
         title=title,
@@ -165,6 +182,7 @@ def _parse_detail_page(html: str, url: str) -> DaftListing | None:
         description=description,
         estate_agent=estate_agent,
         raw_html=html[:5000],
+        source="daft",
     )
 
 
