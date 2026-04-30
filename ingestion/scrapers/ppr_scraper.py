@@ -38,6 +38,8 @@ async def download_ppr_csv(year: int) -> list[PPRRecord]:
     # verify=False: PPR site uses a certificate chain not in Python's bundled CA store
     async with httpx.AsyncClient(timeout=60.0, follow_redirects=True, verify=False) as client:
         resp = await client.get(url)
+        if resp.status_code == 404:
+            return []
         resp.raise_for_status()
 
     # PPR CSV uses latin-1 encoding

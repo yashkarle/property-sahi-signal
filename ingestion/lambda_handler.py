@@ -52,10 +52,16 @@ async def _ingest_ppr(pool: asyncpg.Pool, results: dict) -> None:
         from ingestion.scrapers.ppr_scraper import download_ppr_csv, filter_dublin_records
         from ingestion.parsers.ppr_parser import parse_ppr_record
 
+        # PPR publishes data with a lag — try current year, fall back to previous
         year = date.today().year
         ppr_records = await download_ppr_csv(year)
+        if not ppr_records:
+            year -= 1
+            logger.info("ppr_fallback_to_previous_year", year=year)
+            ppr_records = await download_ppr_csv(year)
+
         dublin_records = filter_dublin_records(ppr_records)
-        logger.info("ppr_downloaded", total=len(ppr_records), dublin=len(dublin_records))
+        logger.info("ppr_downloaded", year=year, total=len(ppr_records), dublin=len(dublin_records))
 
         source_file = f"PPR-{year}"
         rows = [parse_ppr_record(r, source_file) for r in dublin_records]
