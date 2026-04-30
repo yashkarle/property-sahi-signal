@@ -4,9 +4,12 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
+import structlog
 from bs4 import BeautifulSoup
 
 from ingestion.scrapers.base_scraper import get_browser, get_page_html
+
+logger = structlog.get_logger()
 
 DAFT_SEARCH_URL = (
     "https://www.daft.ie/property-for-sale/dublin"
@@ -45,12 +48,15 @@ async def scrape_daft_search(
             url = DAFT_SEARCH_URL.format(
                 min_price=min_price, max_price=max_price, offset=offset
             )
+            logger.info("daft_fetching_page", page=page_num + 1, url=url)
             html = await get_page_html(url, browser)
             if not html:
+                logger.warning("daft_page_empty", page=page_num + 1)
                 break
 
             page_listings = _parse_search_results(html)
             if not page_listings:
+                logger.info("daft_no_more_listings", page=page_num + 1)
                 break
 
             for listing_url in page_listings:
@@ -68,12 +74,26 @@ def _parse_search_results(html: str) -> list[str]:
     """Extract property detail URLs from search results page."""
     soup = BeautifulSoup(html, "lxml")
     urls = []
-    # Daft.ie listing links are in <a> tags with href matching /for-sale/
-    for a in soup.find_all("a", href=re.compile(r"/for-sale/")):
+
+    # Daft.ie listing URLs follow /for-sale/<slug>/<id> pattern
+    # Try both /for-sale/ and /property-for-sale/ paths
+    for a in soup.find_all("a", href=re.compile(r"/(for-sale|property-for-sale)/.+/\d+")):
         href = a.get("href", "")
-        if href and href not in urls:
-            full_url = f"https://www.daft.ie{href}" if href.startswith("/") else href
+        if not href:
+            continue
+        full_url = f"https://www.daft.ie{href}" if href.startswith("/") else href
+        # Strip query strings
+        full_url = full_url.split("?")[0]
+        if full_url not in urls:
             urls.append(full_url)
+
+    logger.info("daft_search_page_parsed", found=len(urls), html_len=len(html))
+    if not urls:
+        # Dump a snippet to help debug selector mismatches
+        all_hrefs = [a.get("href", "") for a in soup.find_all("a", href=True)]
+        sale_hrefs = [h for h in all_hrefs if "sale" in h.lower()][:10]
+        logger.debug("daft_no_listings_found", sample_hrefs=sale_hrefs, title=soup.title.string if soup.title else "")
+
     return urls[:20]
 
 

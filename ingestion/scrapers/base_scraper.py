@@ -35,7 +35,23 @@ async def get_page_html(url: str, browser: Browser, retries: int = 3) -> str | N
         )
         page = await ctx.new_page()
         try:
-            await page.goto(url, wait_until="domcontentloaded", timeout=30000)
+            await page.goto(url, wait_until="networkidle", timeout=45000)
+            # Dismiss cookie/GDPR consent banners if present
+            for selector in [
+                "button:has-text('Accept')",
+                "button:has-text('Accept All')",
+                "button:has-text('I Accept')",
+                "[id*='cookie'] button",
+                "[class*='consent'] button",
+            ]:
+                try:
+                    btn = page.locator(selector).first
+                    if await btn.is_visible(timeout=1000):
+                        await btn.click()
+                        await asyncio.sleep(0.5)
+                        break
+                except Exception:
+                    pass
             await asyncio.sleep(random.uniform(*RATE_LIMIT_DELAY))
             return await page.content()
         except Exception as e:

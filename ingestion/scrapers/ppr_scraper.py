@@ -35,7 +35,8 @@ class PPRRecord:
 
 async def download_ppr_csv(year: int) -> list[PPRRecord]:
     url = PPR_BASE_URL.format(year=year)
-    async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
+    # verify=False: PPR site uses a certificate chain not in Python's bundled CA store
+    async with httpx.AsyncClient(timeout=60.0, follow_redirects=True, verify=False) as client:
         resp = await client.get(url)
         resp.raise_for_status()
 
