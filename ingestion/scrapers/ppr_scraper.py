@@ -1,7 +1,8 @@
 """Property Price Register (PPR) scraper.
 
-The PPR publishes monthly CSV files at:
-https://www.propertypriceregister.ie/website/npsra/pprweb.nsf/Downloads/PPR-{YEAR}.csv
+Download form URL (discovered from PPR website):
+  https://www.propertypriceregister.ie/website/npsra/pprweb.nsf/PPRDownloads
+    ?OpenForm=&File=PPR-{year}.csv&County=ALL&Year={year}&Month=ALL
 
 CSV columns (actual PPR format):
 Date of Sale (dd/mm/yyyy), Address, Postal Code, County, Price (€),
@@ -21,12 +22,11 @@ import structlog
 
 logger = structlog.get_logger()
 
-# Two URL patterns — the $FILE/ form is the canonical Domino download link;
-# the plain form works on some years/mirrors.
-PPR_URL_PATTERNS = [
-    "https://www.propertypriceregister.ie/website/npsra/pprweb.nsf/Downloads/PPR-{year}.csv/$FILE/PPR-{year}.csv",
-    "https://www.propertypriceregister.ie/website/npsra/pprweb.nsf/Downloads/PPR-{year}.csv",
-]
+# Query-string download — works for all available years; County=ALL, Month=ALL = full year
+PPR_DOWNLOAD_URL = (
+    "https://www.propertypriceregister.ie/website/npsra/pprweb.nsf/PPRDownloads"
+    "?OpenForm=&File=PPR-{year}.csv&County=ALL&Year={year}&Month=ALL"
+)
 
 
 @dataclass
@@ -42,43 +42,42 @@ class PPRRecord:
 
 
 async def download_ppr_csv(year: int) -> list[PPRRecord]:
-    """Try each known URL pattern for the given year; return [] if none work."""
+    """Download the full-year PPR CSV for the given year; return [] if unavailable."""
+    url = PPR_DOWNLOAD_URL.format(year=year)
     async with httpx.AsyncClient(timeout=60.0, follow_redirects=True, verify=False) as client:
-        for pattern in PPR_URL_PATTERNS:
-            url = pattern.format(year=year)
-            try:
-                resp = await client.get(url)
-            except Exception as exc:
-                logger.debug("ppr_url_failed", url=url, error=str(exc))
-                continue
+        try:
+            resp = await client.get(url)
+        except Exception as exc:
+            logger.debug("ppr_url_failed", url=url, error=str(exc))
+            return []
 
-            if resp.status_code == 404:
-                logger.debug("ppr_url_404", url=url)
-                continue
-            if resp.status_code != 200:
-                logger.debug("ppr_url_bad_status", url=url, status=resp.status_code)
-                continue
+        if resp.status_code != 200:
+            logger.debug("ppr_url_bad_status", url=url, status=resp.status_code)
+            return []
 
-            # Verify we actually got CSV and not an HTML error page
-            preview = resp.content[:512]
-            if b"<html" in preview.lower() or b"<!doctype" in preview.lower():
-                logger.debug("ppr_url_returned_html", url=url, preview=preview[:200].decode("latin-1", errors="replace"))
-                continue
+        # Verify we got CSV not an HTML error page
+        preview = resp.content[:512]
+        if b"<html" in preview.lower() or b"<!doctype" in preview.lower():
+            logger.debug(
+                "ppr_url_returned_html",
+                url=url,
+                preview=preview[:200].decode("latin-1", errors="replace"),
+            )
+            return []
 
-            logger.info("ppr_url_ok", url=url, bytes=len(resp.content))
-            content = resp.content.decode("latin-1")
-            reader = csv.DictReader(io.StringIO(content))
-            records = []
-            for row in reader:
-                try:
-                    record = _parse_row(row)
-                    if record:
-                        records.append(record)
-                except Exception:
-                    continue
-            return records
+        logger.info("ppr_url_ok", url=url, bytes=len(resp.content))
 
-    return []
+    content = resp.content.decode("latin-1")
+    reader = csv.DictReader(io.StringIO(content))
+    records = []
+    for row in reader:
+        try:
+            record = _parse_row(row)
+            if record:
+                records.append(record)
+        except Exception:
+            continue
+    return records
 
 
 def _parse_row(row: dict[str, str]) -> PPRRecord | None:
