@@ -6,6 +6,9 @@ import random
 from typing import Any
 
 from playwright.async_api import Browser, async_playwright
+from playwright_stealth import Stealth
+
+_stealth = Stealth()
 
 USER_AGENTS = [
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -34,6 +37,7 @@ async def get_page_html(url: str, browser: Browser, retries: int = 3) -> str | N
             locale="en-IE",
         )
         page = await ctx.new_page()
+        await _stealth.apply_stealth_async(page)
         try:
             # domcontentloaded is sufficient; networkidle never fires on Daft
             # due to persistent background analytics/tracking requests
