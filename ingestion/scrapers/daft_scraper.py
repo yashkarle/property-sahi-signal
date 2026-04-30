@@ -1,4 +1,13 @@
-"""Daft.ie Playwright scraper for active property listings in Dublin."""
+"""Daft.ie Playwright scraper for active property listings in Dublin.
+
+NOTE: Daft.ie is behind Cloudflare Bot Management which blocks headless
+Playwright regardless of stealth patches as of 2024+. When run locally
+the scraper will return 0 listings ("Just a moment..." challenge page).
+
+For local dev, use `make seed-properties` to populate the database with
+realistic sample listings. The Lambda runs in AWS with a residential IP
+which is typically not challenged by Cloudflare.
+"""
 from __future__ import annotations
 
 import re
