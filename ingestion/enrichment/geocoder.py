@@ -1,4 +1,6 @@
 """Address → lat/lng geocoding using Google Maps Geocoding API."""
+from __future__ import annotations
+
 import os
 from typing import Any
 

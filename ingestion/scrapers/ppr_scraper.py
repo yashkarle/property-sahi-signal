@@ -7,6 +7,8 @@ CSV columns (actual PPR format):
 Date of Sale (dd/mm/yyyy), Address, Postal Code, County, Price (€),
 Not Full Market Price, VAT Exclusive, Description of Property, Property Size Description
 """
+from __future__ import annotations
+
 import csv
 import io
 import re

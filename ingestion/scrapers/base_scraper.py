@@ -1,4 +1,6 @@
 """Base scraper with retry logic, rate limiting, and Playwright setup."""
+from __future__ import annotations
+
 import asyncio
 import random
 from typing import Any

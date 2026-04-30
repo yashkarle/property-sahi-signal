@@ -6,6 +6,8 @@ Scrapes Daft.ie + downloads PPR CSV and ingests into Postgres + OpenSearch.
 Can also run locally:
     DATABASE_URL=postgresql://... python ingestion/lambda_handler.py
 """
+from __future__ import annotations
+
 import asyncio
 import json
 import os

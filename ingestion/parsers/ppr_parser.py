@@ -1,4 +1,6 @@
 """Convert PPRRecord → dict ready for ppr_sales Postgres upsert."""
+from __future__ import annotations
+
 import re
 
 from ingestion.scrapers.ppr_scraper import PPRRecord
