@@ -5,10 +5,10 @@ from pathlib import Path
 repo_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(repo_root))
 
-import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from testcontainers.postgres import PostgresContainer
+import pytest  # noqa: E402
+from sqlalchemy import create_engine  # noqa: E402
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine  # noqa: E402
+from testcontainers.postgres import PostgresContainer  # noqa: E402
 
 
 @pytest.fixture(scope="session")
@@ -39,9 +39,10 @@ async def db(postgres_dsn: str) -> AsyncSession:
 @pytest.fixture
 async def client(db: AsyncSession):
     """FastAPI test client with DB dependency overridden to test session."""
-    from httpx import AsyncClient, ASGITransport
-    from app.main import app
+    from httpx import ASGITransport, AsyncClient
+
     from app.dependencies import get_db
+    from app.main import app
 
     async def _override_get_db():
         yield db

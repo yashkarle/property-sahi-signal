@@ -56,10 +56,10 @@ async def ingest_from_url(url: str, db: AsyncSession) -> Property:
         )
 
     # Deferred imports: playwright and ingestion deps only needed at ingest time
+    from ingestion.parsers.property_parser import parse_listing  # noqa: PLC0415
     from ingestion.scrapers.base_scraper import browser_context, get_page_html  # noqa: PLC0415
     from ingestion.scrapers.daft_scraper import parse_daft_listing_html  # noqa: PLC0415
     from ingestion.scrapers.myhome_scraper import parse_myhome_listing_html  # noqa: PLC0415
-    from ingestion.parsers.property_parser import parse_listing  # noqa: PLC0415
 
     async with browser_context() as browser:
         html = await get_page_html(url, browser)
