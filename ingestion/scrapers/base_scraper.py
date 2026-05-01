@@ -3,7 +3,8 @@ from __future__ import annotations
 
 import asyncio
 import random
-from typing import Any
+from contextlib import asynccontextmanager
+from typing import Any, AsyncIterator
 
 from playwright.async_api import Browser, async_playwright
 
@@ -29,6 +30,21 @@ async def get_browser() -> Browser:
         args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
     )
     return browser
+
+
+@asynccontextmanager
+async def browser_context() -> AsyncIterator[Any]:
+    """Async context manager that starts Playwright, launches browser, and cleans up both."""
+    p = await async_playwright().start()
+    browser = await p.chromium.launch(
+        headless=True,
+        args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
+    )
+    try:
+        yield browser
+    finally:
+        await browser.close()
+        await p.stop()
 
 
 async def get_page_html(url: str, browser: Browser, retries: int = 3) -> str | None:

@@ -14,9 +14,13 @@ class _FakeBrowser:
 
 @pytest.fixture(autouse=True)
 def _mock_browser(monkeypatch) -> None:
-    async def _get_browser():
-        return _FakeBrowser()
-    monkeypatch.setattr("ingestion.scrapers.base_scraper.get_browser", _get_browser)
+    from contextlib import asynccontextmanager
+
+    @asynccontextmanager
+    async def _fake_browser_context():
+        yield _FakeBrowser()
+
+    monkeypatch.setattr("ingestion.scrapers.base_scraper.browser_context", _fake_browser_context)
 
 
 async def test_ingest_url_happy_path(client: AsyncClient, monkeypatch) -> None:

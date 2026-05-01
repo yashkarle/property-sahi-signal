@@ -56,13 +56,12 @@ async def ingest_from_url(url: str, db: AsyncSession) -> Property:
         )
 
     # Deferred imports: playwright and ingestion deps only needed at ingest time
-    from ingestion.scrapers.base_scraper import get_browser, get_page_html  # noqa: PLC0415
+    from ingestion.scrapers.base_scraper import browser_context, get_page_html  # noqa: PLC0415
     from ingestion.scrapers.daft_scraper import parse_daft_listing_html  # noqa: PLC0415
     from ingestion.scrapers.myhome_scraper import parse_myhome_listing_html  # noqa: PLC0415
     from ingestion.parsers.property_parser import parse_listing  # noqa: PLC0415
 
-    browser = await get_browser()
-    try:
+    async with browser_context() as browser:
         html = await get_page_html(url, browser)
         if html is None:
             raise HTTPException(status_code=502, detail="Portal unreachable after retries.")
@@ -77,8 +76,6 @@ async def ingest_from_url(url: str, db: AsyncSession) -> Property:
                 status_code=422,
                 detail="Could not parse listing. Page may have been removed or structure changed.",
             )
-    finally:
-        await browser.close()
 
     prop_dict = parse_listing(listing)
     prop_id = await _upsert_property(db, prop_dict)
@@ -91,7 +88,10 @@ async def ingest_from_url(url: str, db: AsyncSession) -> Property:
         .where(Property.id == prop_id)
         .options(selectinload(Property.neighbourhood_score))
     )
-    return result.scalar_one()
+    prop = result.scalar_one_or_none()
+    if prop is None:
+        raise HTTPException(status_code=404, detail="Property not found after upsert.")
+    return prop
 
 
 async def _upsert_property(db: AsyncSession, prop_dict: dict) -> uuid.UUID:
