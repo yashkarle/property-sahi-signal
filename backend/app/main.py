@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.core.database import engine
 from app.core.opensearch import ensure_index_exists
-from app.routers import admin, bidding, chat, financing, pricing, professionals, search, viewing
+from app.routers import admin, bidding, chat, financing, ingest, pricing, professionals, search, viewing
 
 logger = structlog.get_logger()
 
@@ -66,6 +66,7 @@ app.include_router(bidding.router, prefix=PREFIX)
 app.include_router(pricing.router, prefix=PREFIX)
 app.include_router(professionals.router, prefix=PREFIX)
 app.include_router(financing.router, prefix=PREFIX)
+app.include_router(ingest.router, prefix=PREFIX)
 app.include_router(admin.router, prefix=PREFIX)
 app.include_router(chat.router, prefix=PREFIX)
 
