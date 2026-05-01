@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useSearchProperties } from '../api/search'
+import { useSearchProperties, useImportFromUrl } from '../api/search'
 import { useComparisonStore } from '../store/comparisonStore'
 import { useSessionStore } from '../store/sessionStore'
 import { useNavigate } from 'react-router-dom'
@@ -72,6 +72,61 @@ function PropertyCard({ prop }: { prop: PropertySummary }) {
   )
 }
 
+function UrlImportBar() {
+  const [importUrl, setImportUrl] = useState('')
+  const [importError, setImportError] = useState<string | null>(null)
+  const navigate = useNavigate()
+  const { setActiveProperty } = useSessionStore()
+  const { mutate: importProperty, isPending: isImporting } = useImportFromUrl()
+
+  const handleImport = () => {
+    const trimmed = importUrl.trim()
+    if (!trimmed) return
+    setImportError(null)
+    importProperty(
+      { url: trimmed },
+      {
+        onSuccess: (prop) => {
+          setActiveProperty(prop.id)
+          navigate(`/property/${prop.id}`)
+        },
+        onError: (err: any) => {
+          const detail = err?.response?.data?.detail ?? 'Import failed. Check the URL and try again.'
+          setImportError(detail)
+        },
+      }
+    )
+  }
+
+  return (
+    <div className="mb-6 p-4 bg-gray-50 rounded-xl border border-gray-200">
+      <p className="text-xs font-medium text-gray-600 mb-2">
+        Import a listing directly — paste a Daft or MyHome URL
+      </p>
+      <div className="flex gap-2">
+        <input
+          type="url"
+          value={importUrl}
+          onChange={(e) => setImportUrl(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleImport()}
+          placeholder="https://www.daft.ie/for-sale/..."
+          className="flex-1 px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+        <button
+          onClick={handleImport}
+          disabled={isImporting || !importUrl.trim()}
+          className="px-4 py-2 rounded-lg bg-blue-700 text-white text-sm font-medium hover:bg-blue-600 disabled:opacity-50"
+        >
+          {isImporting ? 'Importing…' : 'Import'}
+        </button>
+      </div>
+      {importError && (
+        <p className="mt-2 text-xs text-red-600">{importError}</p>
+      )}
+    </div>
+  )
+}
+
 export default function SearchPage() {
   const [query, setQuery] = useState('')
   const [filters, setFilters] = useState<SearchFilters>({
@@ -79,7 +134,6 @@ export default function SearchPage() {
     bedrooms_min: 2,
     bathrooms_min: 2,
     carpet_area_sqm_min: 70,
-    exclude_electric_storage: true,
   })
   const { mutate: search, data, isPending } = useSearchProperties(null)
 
@@ -94,6 +148,8 @@ export default function SearchPage() {
         <h1 className="text-2xl font-bold text-gray-900 mb-1">Property Search</h1>
         <p className="text-sm text-gray-500">Semantic search across Dublin listings — describe what you want</p>
       </div>
+
+      <UrlImportBar />
 
       {/* Search bar */}
       <div className="flex gap-3 mb-4">
@@ -135,22 +191,6 @@ export default function SearchPage() {
           <option value="70">≥70m² (min)</option>
           <option value="80">≥80m²</option>
         </select>
-        <label className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-gray-300 bg-white cursor-pointer">
-          <input
-            type="checkbox"
-            checked={filters.exclude_electric_storage ?? true}
-            onChange={(e) => setFilters((f) => ({ ...f, exclude_electric_storage: e.target.checked }))}
-          />
-          Exclude electric storage
-        </label>
-        <label className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-gray-300 bg-white cursor-pointer">
-          <input
-            type="checkbox"
-            checked={filters.is_chain_free ?? false}
-            onChange={(e) => setFilters((f) => ({ ...f, is_chain_free: e.target.checked || undefined }))}
-          />
-          Chain-free only
-        </label>
       </div>
 
       {/* Results */}
