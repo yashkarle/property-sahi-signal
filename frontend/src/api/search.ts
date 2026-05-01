@@ -25,3 +25,8 @@ export const useCompareProperties = () =>
   useMutation<CompareResponse, Error, { property_ids: string[] }>({
     mutationFn: (req) => apiClient.post('/search/properties/compare', req).then((r) => r.data),
   })
+
+export const useImportFromUrl = () =>
+  useMutation<PropertyDetail, { response: { data: { detail: string } } }, { url: string }>({
+    mutationFn: (req) => apiClient.post('/ingest/url', req).then((r) => r.data),
+  })
