@@ -2,6 +2,7 @@ import uuid
 
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from app.dependencies import AuthDep, DbSession
 from app.models.property import Property
@@ -21,7 +22,11 @@ async def search_properties(request: SearchRequest, db: DbSession, _: AuthDep) -
 
 @router.get("/properties/{property_id}", response_model=PropertyDetail)
 async def get_property(property_id: uuid.UUID, db: DbSession, _: AuthDep) -> PropertyDetail:
-    result = await db.execute(select(Property).where(Property.id == property_id))
+    result = await db.execute(
+        select(Property)
+        .where(Property.id == property_id)
+        .options(selectinload(Property.neighbourhood_score))
+    )
     prop = result.scalar_one_or_none()
     if not prop:
         raise HTTPException(status_code=404, detail="Property not found")

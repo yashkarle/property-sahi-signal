@@ -31,7 +31,10 @@ async def create_session(
     if not prop:
         raise HTTPException(status_code=404, detail="Property not found")
 
-    strategy = generate_strategy(prop, request.user_max_budget)
+    try:
+        strategy: str | None = generate_strategy(prop, request.user_max_budget)
+    except Exception:
+        strategy = None
     session = BidSession(
         property_id=request.property_id,
         user_max_budget=request.user_max_budget,
@@ -39,8 +42,13 @@ async def create_session(
     )
     db.add(session)
     await db.commit()
-    await db.refresh(session)
-    return BidSessionOut.model_validate(session)
+    # Re-fetch with relationships loaded to avoid lazy-load outside async context
+    fresh = await db.execute(
+        select(BidSession)
+        .where(BidSession.id == session.id)
+        .options(selectinload(BidSession.entries))
+    )
+    return BidSessionOut.model_validate(fresh.scalar_one())
 
 
 @router.get("/sessions/{session_id}", response_model=BidSessionOut)
@@ -89,8 +97,9 @@ async def get_price_model(session_id: uuid.UUID, db: DbSession, _: AuthDep) -> P
         select(PriceModelResult)
         .where(PriceModelResult.property_id == session.property_id)
         .order_by(PriceModelResult.run_at.desc())
+        .limit(1)
     )
-    latest = model_result.scalar_one_or_none()
+    latest = model_result.scalars().first()
     if not latest:
         raise HTTPException(status_code=404, detail="No price model run yet. POST to /pricing/analyse first.")
     return PriceModelResultOut.model_validate(latest)
@@ -112,5 +121,8 @@ async def create_bid_letter(
     if not prop:
         raise HTTPException(status_code=404, detail="Property not found")
 
-    letter = generate_bid_letter(prop, request.user_bid, request.competing_bid, request.additional_context or "")
+    try:
+        letter = generate_bid_letter(prop, request.user_bid, request.competing_bid, request.additional_context or "")
+    except Exception:
+        letter = "[Bid letter generation unavailable — Bedrock not configured. Set real AWS credentials to enable this.]"
     return BidLetterResponse(letter_text=letter)
