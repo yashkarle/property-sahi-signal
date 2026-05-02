@@ -17,7 +17,7 @@ def apply_final_constraints(
     4. Ensure entry ≤ sealed ≤ ceiling
     """
     if buyer_aip is not None and buyer_savings is not None:
-        closing_costs = round(min(ceiling, asking_price or ceiling) * 0.01) + 3150  # 1% stamp + ~€3,150
+        closing_costs = round(min(ceiling, asking_price or ceiling) * 0.01) + 4500  # 1% stamp + €2.5k sol + €1k land reg + €1k survey/val
         buyer_ceiling = buyer_aip + buyer_savings - closing_costs
         ceiling = min(ceiling, buyer_ceiling)
 
@@ -26,9 +26,9 @@ def apply_final_constraints(
     sealed = _round_2500(sealed)
     ceiling = _round_2500(ceiling)
 
-    # Ensure ordering
-    entry = min(entry, sealed)
+    # Ensure ordering: entry ≤ sealed ≤ ceiling
     sealed = min(sealed, ceiling)
+    entry = min(entry, sealed)
 
     return {"entry": entry, "sealed": sealed, "ceiling": ceiling}
 
