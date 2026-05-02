@@ -23,6 +23,8 @@ class ComparableOut(BaseModel):
     distance_m: float
     months_ago: float
     time_adjusted_price: int | None = None
+    latitude: float | None = None
+    longitude: float | None = None
     similarity_score: float | None = None
 
 

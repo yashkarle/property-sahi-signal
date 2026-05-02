@@ -65,7 +65,7 @@ async def get_comparables(
     )
     latest = result.scalars().first()
     if not latest or not latest.comparables_used:
-        raise HTTPException(status_code=404, detail="No model results found")
+        raise HTTPException(status_code=404, detail="No model results found. Run /pricing/analyse first.")
 
     comp_ids = [uuid.UUID(c) for c in latest.comparables_used[:20]]
     ppr_result = await db.execute(select(PPRSale).where(PPRSale.id.in_(comp_ids)))
@@ -74,9 +74,32 @@ async def get_comparables(
     prop_result = await db.execute(select(Property).where(Property.id == property_id))
     prop = prop_result.scalar_one_or_none()
     if not prop:
-        raise HTTPException(status_code=404)
+        raise HTTPException(status_code=404, detail="Property not found")
 
-    from app.ml.comparables import haversine_m
+    from app.ml.comparables import ComparableRecord, haversine_m
+    from app.ml.time_adjustment import compute_monthly_drift, time_adjust_prices
+
+    # Build ComparableRecord list for time adjustment
+    comp_records = [
+        ComparableRecord(
+            id=str(c.id),
+            address=c.address,
+            date_of_sale=c.date_of_sale,
+            price_eur=c.price_eur,
+            floor_area_sqm=c.floor_area_sqm,
+            price_per_sqm=float(c.price_per_sqm) if c.price_per_sqm else None,
+            bedrooms=c.bedrooms,
+            property_type=c.property_type,
+            latitude=float(c.latitude) if c.latitude else 0.0,
+            longitude=float(c.longitude) if c.longitude else 0.0,
+        )
+        for c in comps
+    ]
+
+    monthly_drift = compute_monthly_drift(comp_records, date.today())
+    adjusted_pairs = time_adjust_prices(comp_records, monthly_drift, date.today())
+    adjusted_by_id = {pair[0].id: pair[1] for pair in adjusted_pairs}
+
     out = []
     for c in comps:
         dist = haversine_m(
@@ -88,12 +111,15 @@ async def get_comparables(
             address=c.address,
             date_of_sale=c.date_of_sale,
             price_eur=c.price_eur,
+            time_adjusted_price=adjusted_by_id.get(str(c.id)),
             floor_area_sqm=c.floor_area_sqm,
             price_per_sqm=float(c.price_per_sqm) if c.price_per_sqm else None,
             bedrooms=c.bedrooms,
             property_type=c.property_type,
             distance_m=round(dist),
             months_ago=round(months_ago, 1),
+            latitude=float(c.latitude) if c.latitude else None,
+            longitude=float(c.longitude) if c.longitude else None,
         ))
     return sorted(out, key=lambda x: x.distance_m)
 
