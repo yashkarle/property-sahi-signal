@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useFinancingSimulation } from '../api/financing'
+import { useFinancialProfile } from '../store/financialProfileStore'
 
 function formatEur(n: number) {
   return `€${n.toLocaleString('en-IE')}`
@@ -19,12 +20,14 @@ function ProbBar({ prob }: { prob: number }) {
 }
 
 export default function FinancingPage() {
+  const { aip, savings, isFirstTimeBuyer, setAip, setSavings, setIsFirstTimeBuyer } = useFinancialProfile()
+
   const [form, setForm] = useState({
     property_price: 325000,
-    aip_amount: 280000,
-    current_savings: 80000,
+    aip_amount: aip || 280000,
+    current_savings: savings || 80000,
     monthly_savings_rate: 2000,
-    is_first_time_buyer: true,
+    is_first_time_buyer: isFirstTimeBuyer,
   })
 
   const simulate = useFinancingSimulation()
@@ -46,7 +49,12 @@ export default function FinancingPage() {
               <input
                 type="number"
                 value={(form as any)[key]}
-                onChange={(e) => setForm((f) => ({ ...f, [key]: Number(e.target.value) }))}
+                onChange={(e) => {
+                  const v = Number(e.target.value)
+                  setForm((f) => ({ ...f, [key]: v }))
+                  if (key === 'aip_amount') setAip(v)
+                  if (key === 'current_savings') setSavings(v)
+                }}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
               />
             </div>
@@ -56,7 +64,10 @@ export default function FinancingPage() {
           <input
             type="checkbox"
             checked={form.is_first_time_buyer}
-            onChange={(e) => setForm((f) => ({ ...f, is_first_time_buyer: e.target.checked }))}
+            onChange={(e) => {
+              setForm((f) => ({ ...f, is_first_time_buyer: e.target.checked }))
+              setIsFirstTimeBuyer(e.target.checked)
+            }}
           />
           First-time buyer
         </label>
