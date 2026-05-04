@@ -1,0 +1,3 @@
+# Un-ignore the src/lib/ directory — the root .gitignore has a bare `lib/`
+# entry for Python packaging which inadvertently catches this frontend directory.
+!lib/
