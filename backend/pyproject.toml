@@ -56,7 +56,8 @@ dependencies = [
 
 [project.optional-dependencies]
 ml = [
-    "pymc>=5.18.0",
+    # pymc omitted: not imported at runtime (model runs via remote dhub service),
+    # and its llvmlite dep requires cmake which is not available in all envs.
     "numpy>=1.26.0",
     "scipy>=1.13.0",
     "scikit-learn>=1.5.0",

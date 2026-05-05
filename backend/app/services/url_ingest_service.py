@@ -80,6 +80,9 @@ async def ingest_from_url(url: str, db: AsyncSession) -> Property:
     prop_dict = parse_listing(listing)
     prop_id = await _upsert_property(db, prop_dict)
 
+    # Best-effort geocoding — needed for pricing model comparables
+    await _geocode_if_missing(db, prop_id, prop_dict.get("address", ""))
+
     # Best-effort: never 500 on embedding failure
     await _enrich_embedding(prop_id, prop_dict)
 
@@ -148,6 +151,50 @@ async def _upsert_property(db: AsyncSession, prop_dict: dict) -> uuid.UUID:
     result = await db.execute(stmt)
     await db.commit()
     return result.scalar_one()
+
+
+async def _geocode_if_missing(db: AsyncSession, prop_id: uuid.UUID, address: str) -> None:
+    """Geocode address and update lat/lng if not already set. Uses Nominatim (free)."""
+    if not address:
+        return
+    try:
+        result = await db.execute(select(Property.latitude).where(Property.id == prop_id))
+        if result.scalar_one_or_none() is not None:
+            return  # already geocoded
+
+        from geopy.geocoders import Nominatim  # noqa: PLC0415
+        from geopy.adapters import AioHTTPAdapter  # noqa: PLC0415
+        from sqlalchemy import update  # noqa: PLC0415
+
+        async with Nominatim(
+            user_agent="property-sahi-signal",
+            adapter_factory=AioHTTPAdapter,
+        ) as geolocator:
+            location = await geolocator.geocode(f"{address}, Dublin, Ireland", timeout=10)
+
+        if location:
+            # Derive Dublin district from eircode in address (e.g. "D24 RX99" → "D24")
+            import re  # noqa: PLC0415
+            district = None
+            eircode_match = re.search(r"\b(D\d{1,2}W?)\b", address.upper())
+            if eircode_match:
+                district_map = {
+                    "D1": "D1", "D2": "D2", "D4": "D4", "D6": "D6", "D6W": "D6W",
+                    "D7": "D7", "D8": "D8", "D9": "D9", "D10": "D10", "D11": "D11",
+                    "D12": "D12", "D14": "D14", "D15": "D15", "D16": "D16",
+                    "D18": "D18", "D20": "D20", "D22": "D22", "D24": "D24",
+                }
+                district = district_map.get(eircode_match.group(1))
+
+            await db.execute(
+                update(Property)
+                .where(Property.id == prop_id)
+                .values(latitude=location.latitude, longitude=location.longitude, dublin_district=district)
+            )
+            await db.commit()
+            logger.info("url_ingest_geocoded", prop_id=str(prop_id), lat=location.latitude, lng=location.longitude)
+    except Exception as exc:
+        logger.warning("url_ingest_geocoding_skipped", prop_id=str(prop_id), error=str(exc))
 
 
 async def _enrich_embedding(prop_id: uuid.UUID, prop_dict: dict) -> None:

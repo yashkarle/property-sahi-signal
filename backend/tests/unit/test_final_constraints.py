@@ -12,8 +12,8 @@ def test_closing_costs_formula_uses_4500_fixed() -> None:
         asking_price=400_000,
     )
     # buyer_ceiling = 370k + 50k - (round(400k * 0.01) + 4500) = 420k - 8500 = 411500
-    # ceiling = min(500k, 411500) = 411500 → rounded to 2500 = 412500
-    assert result["ceiling"] == 412_500
+    # floored to nearest 2500 (never round UP — would exceed funded max) = 410000
+    assert result["ceiling"] == 410_000
 
 
 def test_closing_costs_old_formula_is_not_used() -> None:
@@ -54,8 +54,8 @@ def test_ceiling_is_capped_by_buyer_ceiling() -> None:
         asking_price=365_000,
     )
     # stamp = 3650, fixed = 4500, closing = 8150
-    # buyer_ceiling = 370k + 50k - 8150 = 411850 → round to 2500 = 412500
-    assert result["ceiling"] == 412_500
+    # buyer_ceiling = 370k + 50k - 8150 = 411850 → floored to 2500 = 410000
+    assert result["ceiling"] == 410_000
     assert result["ceiling"] < 665_000
 
 

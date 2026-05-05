@@ -15,13 +15,13 @@ help:
 	@echo "  format               - Run ruff formatter"
 
 install:
-	pip install -e "backend/[dev]"
-	pip install -r ingestion/requirements.txt
-	pip install -r scripts/requirements.txt
-	playwright install chromium
+	python3 -m pip install -e "backend/[dev]"
+	python3 -m pip install -r ingestion/requirements.txt
+	python3 -m pip install -r scripts/requirements.txt
+	python3 -m playwright install chromium
 
 install-ml:
-	pip install -e "backend/[ml]"
+	python3 -m pip install -e "backend/[ml]"
 
 dev:
 	docker compose up --build
