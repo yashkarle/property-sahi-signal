@@ -43,7 +43,9 @@ async def create_session(
     )
     price_model = pm_result.scalars().first()
 
-    effective_budget = request.user_aip or request.user_max_budget
+    # user_max_budget is the full ceiling computed by the frontend (AIP + savings − closing costs).
+    # Never overwrite it with raw AIP — that loses deposit-backed headroom.
+    effective_budget = request.user_max_budget
     try:
         strategy: str | None = generate_strategy(
             prop, effective_budget,
@@ -98,8 +100,7 @@ async def record_outcome(
         raise HTTPException(status_code=404, detail="Session not found")
 
     session.status = request.outcome
-    if request.actual_sale_price is not None:
-        session.actual_sale_price = request.actual_sale_price
+    session.actual_sale_price = request.actual_sale_price  # None clears a previously recorded price
     await db.commit()
 
     fresh = await db.execute(
@@ -119,13 +120,25 @@ async def get_bid_history(db: DbSession, _: AuthDep) -> list[BidHistoryItem]:
     )
     sessions = sessions_result.scalars().all()
 
-    seen_props: set[uuid.UUID] = set()
+    # Batch-load the latest price model result per property to avoid N+1 queries
+    property_ids = list({s.property_id for s in sessions})
+    pm_by_prop: dict[uuid.UUID, PriceModelResult] = {}
+    if property_ids:
+        pm_rows_result = await db.execute(
+            select(PriceModelResult)
+            .where(
+                PriceModelResult.property_id.in_(property_ids),
+                PriceModelResult.status == "ready",
+            )
+            .order_by(PriceModelResult.run_at.desc())
+        )
+        for pm_row in pm_rows_result.scalars().all():
+            # Keep only the most recent per property (rows already ordered desc)
+            if pm_row.property_id not in pm_by_prop:
+                pm_by_prop[pm_row.property_id] = pm_row
+
     items: list[BidHistoryItem] = []
     for session in sessions:
-        if session.property_id in seen_props:
-            continue
-        seen_props.add(session.property_id)
-
         your_max = max(
             (e.bid_amount for e in session.entries if e.submitted_by == "user"),
             default=None,
@@ -135,19 +148,15 @@ async def get_bid_history(db: DbSession, _: AuthDep) -> list[BidHistoryItem]:
             default=None,
         )
 
-        pm_res = await db.execute(
-            select(PriceModelResult)
-            .where(PriceModelResult.property_id == session.property_id, PriceModelResult.status == "ready")
-            .order_by(PriceModelResult.run_at.desc())
-            .limit(1)
-        )
-        pm = pm_res.scalars().first()
+        pm = pm_by_prop.get(session.property_id)
         pm_summary = PriceModelSummary(
             offer_entry=pm.offer_entry,
             offer_sealed=pm.offer_sealed,
             p25=pm.p25_estimate,
             p50=pm.p50_estimate,
-            sealed_bid_probability=float(pm.sealed_bid_probability) if pm.sealed_bid_probability else None,
+            sealed_bid_probability=(
+                float(pm.sealed_bid_probability) if pm.sealed_bid_probability is not None else None
+            ),
         ) if pm else None
 
         items.append(BidHistoryItem(

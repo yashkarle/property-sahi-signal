@@ -33,6 +33,7 @@ class PricingAnalyseRequest(BaseModel):
     subjective_inputs: SubjectiveInputs = SubjectiveInputs()
     buyer_aip: int | None = None
     buyer_savings: int | None = None
+    is_first_time_buyer: bool = True
 
 
 class PriceModelResultOut(BaseModel):

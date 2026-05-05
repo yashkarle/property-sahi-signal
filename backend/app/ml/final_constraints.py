@@ -18,8 +18,11 @@ def apply_final_constraints(
     """
     if buyer_aip is not None and buyer_savings is not None:
         closing_costs = round(min(ceiling, asking_price or ceiling) * 0.01) + 4500  # 1% stamp + €2.5k sol + €1k land reg + €1k survey/val
-        buyer_ceiling = buyer_aip + buyer_savings - closing_costs
-        ceiling = min(ceiling, buyer_ceiling)
+        raw_buyer_ceiling = buyer_aip + buyer_savings - closing_costs
+        # Floor to nearest €2,500 BEFORE capping so rounding never pushes us above
+        # the amount the buyer can actually fund.
+        buyer_ceiling_floored = (raw_buyer_ceiling // 2500) * 2500
+        ceiling = min(ceiling, buyer_ceiling_floored)
 
     # Round to nearest €2,500
     entry = _round_2500(entry)

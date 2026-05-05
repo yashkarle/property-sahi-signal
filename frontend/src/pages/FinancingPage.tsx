@@ -88,9 +88,9 @@ export default function FinancingPage() {
             <div className="space-y-1.5 text-sm">
               {[
                 ['Stamp duty (1%)', simulate.data.closing_costs.stamp_duty],
-                ['Solicitor fees', simulate.data.closing_costs.solicitor_fee],
-                ['Surveyor', simulate.data.closing_costs.surveyor_fee],
-                ['Valuation fee', simulate.data.closing_costs.valuation_fee],
+                ['Solicitor + land registry', simulate.data.closing_costs.solicitor_fee],
+                ['Structural survey', simulate.data.closing_costs.surveyor_fee],
+                ['Bank valuation + land reg fees', simulate.data.closing_costs.valuation_fee],
               ].map(([label, value]) => (
                 <div key={label as string} className="flex justify-between">
                   <span className="text-gray-600">{label}</span>

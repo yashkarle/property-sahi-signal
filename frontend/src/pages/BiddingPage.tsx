@@ -58,7 +58,11 @@ const STEP_COLORS = ['#1e40af', '#0369a1', '#0d9488', '#dc2626']
 export default function BiddingPage() {
   const { activePropertyId, activeBidSessionId, setActiveBidSession } = useSessionStore()
   const { aip, savings, isFirstTimeBuyer, setAip, setSavings } = useFinancialProfile()
-  const ceiling = buyerCeiling(aip, savings, isFirstTimeBuyer)
+  // When a session is active, derive ceiling from the saved session values so
+  // editing the profile on FinancingPage doesn't silently rewrite an open session.
+  const sessionAip = (activeBidSessionId && session) ? (session.user_aip ?? aip) : aip
+  const sessionSavings = (activeBidSessionId && session) ? (session.user_savings ?? savings) : savings
+  const ceiling = buyerCeiling(sessionAip, sessionSavings, isFirstTimeBuyer)
 
   const [bidAmount, setBidAmount] = useState('')
   const [submittedBy, setSubmittedBy] = useState<'user' | 'other_buyer'>('user')
@@ -76,11 +80,11 @@ export default function BiddingPage() {
   const recordOutcome = useRecordOutcome(activeBidSessionId ?? '')
 
   const handleCreateSession = () => {
-    if (!activePropertyId) return
+    if (!activePropertyId || (!ceiling && !aip)) return
     createSession.mutate(
       {
         property_id: activePropertyId,
-        user_max_budget: ceiling || aip || 1,
+        user_max_budget: ceiling || aip,  // ceiling is the full AIP+savings−costs; aip alone if no savings
         user_aip: aip || undefined,
         user_savings: savings || undefined,
       },
@@ -139,6 +143,15 @@ export default function BiddingPage() {
 
   const compLats = (comparables as any[]).filter((c) => c.latitude && c.longitude)
 
+  // Center the map on the centroid of all geocoded comparables (they are within 1km
+  // of the subject property, so the centroid is a good proxy for the property location).
+  const mapCenter: [number, number] = compLats.length > 0
+    ? [
+        compLats.reduce((s: number, c: any) => s + c.latitude, 0) / compLats.length,
+        compLats.reduce((s: number, c: any) => s + c.longitude, 0) / compLats.length,
+      ]
+    : [53.3498, -6.2603]
+
   return (
     <div className="flex h-full overflow-hidden">
 
@@ -170,14 +183,14 @@ export default function BiddingPage() {
             </div>
             {ceiling > 0 && (
               <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4 text-sm">
-                <span className="text-gray-600">Your ceiling (90% LTV): </span>
+                <span className="text-gray-600">Your ceiling ({isFirstTimeBuyer ? '90%' : '80%'} LTV): </span>
                 <span className="font-bold text-red-700">{eur(ceiling)}</span>
                 <div className="text-gray-400 text-xs mt-0.5">
                   = {eur(aip)} AIP + {eur(savings)} − closing costs
                 </div>
               </div>
             )}
-            <button onClick={handleCreateSession} disabled={createSession.isPending || !activePropertyId}
+            <button onClick={handleCreateSession} disabled={createSession.isPending || !activePropertyId || (!ceiling && !aip)}
               className="w-full py-2.5 rounded-xl bg-green-700 text-white font-medium hover:bg-green-600 disabled:opacity-50">
               {createSession.isPending ? 'Starting…' : 'Start Session + Generate Strategy'}
             </button>
@@ -305,16 +318,26 @@ export default function BiddingPage() {
       {/* ═══ RIGHT PANEL ═══ */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
 
-        {activeBidSessionId && !offerBand && (
+        {activeBidSessionId && (
           <div className="bg-white rounded-xl border border-gray-200 p-4">
             <button
               onClick={() => propertyId && analysePrice.mutate(
-                { property_id: propertyId, buyer_aip: (session?.user_aip ?? aip) || undefined, buyer_savings: (session?.user_savings ?? savings) || undefined },
-                { onSuccess: () => queryClient.invalidateQueries({ queryKey: ['offer-band'] }) }
+                {
+                  property_id: propertyId,
+                  buyer_aip: sessionAip || undefined,
+                  buyer_savings: sessionSavings || undefined,
+                  is_first_time_buyer: isFirstTimeBuyer,
+                },
+                {
+                  onSuccess: () => {
+                    queryClient.invalidateQueries({ queryKey: ['offer-band'] })
+                    queryClient.invalidateQueries({ queryKey: ['bid-session'] })
+                  },
+                }
               )}
               disabled={analysePrice.isPending || !propertyId}
               className="w-full py-2.5 rounded-xl bg-blue-700 text-white font-medium hover:bg-blue-600 disabled:opacity-50">
-              {analysePrice.isPending ? 'Running BuyerEdge price model…' : '▶ Run Price Analysis (BuyerEdge Methodology)'}
+              {analysePrice.isPending ? 'Running BuyerEdge price model…' : offerBand ? '↺ Re-run Price Analysis' : '▶ Run Price Analysis (BuyerEdge Methodology)'}
             </button>
             {analysePrice.isError && (
               <p className="mt-2 text-xs text-red-600">Analysis failed — check the browser console for details.</p>
@@ -437,7 +460,7 @@ export default function BiddingPage() {
             </div>
             <div style={{ height: 280 }}>
               <MapContainer
-                center={[compLats[0].latitude, compLats[0].longitude]}
+                center={mapCenter}
                 zoom={14}
                 style={{ height: '100%', width: '100%' }}
                 scrollWheelZoom={false}
@@ -447,13 +470,16 @@ export default function BiddingPage() {
                   url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                 />
                 <Circle
-                  center={[compLats[0].latitude, compLats[0].longitude]}
+                  center={mapCenter}
                   radius={1000}
                   pathOptions={{ color: '#64748b', fill: false, dashArray: '6 4', weight: 1, opacity: 0.4 }}
                 />
                 {compLats.map((c: any, i: number) => {
+                  // Use time-adjusted price for colouring (same as the scatter chart) so
+                  // both views agree about which comparables are within the buyer's ceiling.
+                  const compPrice = c.time_adjusted_price ?? c.price_eur
                   const isRecent = c.months_ago < 6
-                  const isInBudget = c.price_eur <= (ceiling || Infinity)
+                  const isInBudget = compPrice <= (ceiling || Infinity)
                   const color = !isInBudget ? '#94a3b8' : isRecent ? '#3b82f6' : '#16a34a'
                   return (
                     <CircleMarker key={i}

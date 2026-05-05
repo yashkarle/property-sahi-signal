@@ -18,6 +18,7 @@ def generate_strategy(
     user_aip: int | None = None,
     user_savings: int | None = None,
     price_model=None,
+    is_first_time_buyer: bool = True,
 ) -> str | None:
     """Generate bidding strategy. Uses Bedrock when available; falls back to rule-based."""
     try:
@@ -38,7 +39,7 @@ walk_away has: ceiling (int), rationale (str).
 Be specific with €amounts rounded to nearest €2,500."""
         return invoke_claude(prompt, system=SYSTEM_PROMPT)
     except Exception:
-        return _rule_based_strategy(prop, user_max_budget, user_aip, user_savings, price_model)
+        return _rule_based_strategy(prop, user_max_budget, user_aip, user_savings, price_model, is_first_time_buyer)
 
 
 def _rule_based_strategy(
@@ -47,17 +48,20 @@ def _rule_based_strategy(
     user_aip: int | None,
     user_savings: int | None,
     price_model,
+    is_first_time_buyer: bool = True,
 ) -> str:
     """Derive a 4-step bidding strategy from the pricing model data without AI."""
     asking = prop.price or 0
 
-    # Buyer ceiling — user_max_budget is always the hard cap;
-    # when AIP+savings are provided also enforce Central Bank 90% LTV rule.
+    # Buyer ceiling — Central Bank LTV: FTB can borrow 90% (10% min deposit),
+    # non-FTB capped at 80% (20% min deposit).
+    ltv = 0.9 if is_first_time_buyer else 0.8
+    ltv_label = "90% LTV (FTB)" if is_first_time_buyer else "80% LTV (non-FTB)"
     if user_aip and user_savings:
-        ltv_ceiling = int(user_aip / 0.9)
+        ltv_ceiling = int(user_aip / ltv)
         closing = round(ltv_ceiling * 0.01) + 4500
         affordability = user_aip + user_savings - closing
-        buyer_ceiling = (min(ltv_ceiling, affordability, user_max_budget) // 1000) * 1000
+        buyer_ceiling = (min(ltv_ceiling, affordability, user_max_budget) // 2500) * 2500
     else:
         buyer_ceiling = user_max_budget
 
@@ -103,7 +107,7 @@ def _rule_based_strategy(
         "best_and_final": {
             "amount": int(buyer_ceiling),
             "rationale": (
-                f"Put in €{buyer_ceiling:,} as your sealed bid — your Central Bank 90% LTV ceiling. "
+                f"Put in €{buyer_ceiling:,} as your sealed bid — your Central Bank {ltv_label} ceiling. "
                 f"Accompany with a bid letter: chain-free, AIP in hand, solicitor instructed, 6–8 week close. "
                 f"Speed-to-close often beats a marginally higher uncertain bid."
             ),
@@ -111,7 +115,7 @@ def _rule_based_strategy(
         "walk_away": {
             "ceiling": int(buyer_ceiling),
             "rationale": (
-                f"Above €{buyer_ceiling:,} you exceed your mortgage limit. Walk away with confidence. "
+                f"Above €{buyer_ceiling:,} you exceed your mortgage limit ({ltv_label}). Walk away with confidence. "
                 f"{walk_note}"
             ),
         },
