@@ -79,14 +79,18 @@ export default function BiddingPage() {
   const { data: comparables = [] } = useComparables(propertyId)
   const recordOutcome = useRecordOutcome(activeBidSessionId ?? '')
 
+  // Require both AIP and savings — without savings we cannot apply LTV/closing-cost
+  // caps, and the resulting strategy/ceiling would be unsafe.
+  const canStartSession = Boolean(activePropertyId && aip > 0 && savings > 0 && ceiling > 0)
+
   const handleCreateSession = () => {
-    if (!activePropertyId || (!ceiling && !aip)) return
+    if (!canStartSession) return
     createSession.mutate(
       {
-        property_id: activePropertyId,
-        user_max_budget: ceiling || aip,  // ceiling is the full AIP+savings−costs; aip alone if no savings
-        user_aip: aip || undefined,
-        user_savings: savings || undefined,
+        property_id: activePropertyId!,
+        user_max_budget: ceiling,
+        user_aip: aip,
+        user_savings: savings,
       },
       { onSuccess: (s: any) => setActiveBidSession(s.id) }
     )
@@ -190,10 +194,15 @@ export default function BiddingPage() {
                 </div>
               </div>
             )}
-            <button onClick={handleCreateSession} disabled={createSession.isPending || !activePropertyId || (!ceiling && !aip)}
+            <button onClick={handleCreateSession} disabled={createSession.isPending || !canStartSession}
               className="w-full py-2.5 rounded-xl bg-green-700 text-white font-medium hover:bg-green-600 disabled:opacity-50">
               {createSession.isPending ? 'Starting…' : 'Start Session + Generate Strategy'}
             </button>
+            {!canStartSession && activePropertyId && (
+              <p className="text-xs text-gray-500 mt-2 text-center">
+                Enter both AIP and savings to compute your ceiling.
+              </p>
+            )}
           </div>
         )}
 
