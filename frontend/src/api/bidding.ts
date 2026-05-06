@@ -39,7 +39,7 @@ export const useOfferBand = (propertyId: string | undefined) =>
 
 export const useAnalysePrice = () =>
   useMutation({
-    mutationFn: (data: { property_id: string; subjective_inputs?: object; buyer_aip?: number; buyer_savings?: number }) =>
+    mutationFn: (data: { property_id: string; subjective_inputs?: object; buyer_aip?: number; buyer_savings?: number; is_first_time_buyer?: boolean }) =>
       apiClient.post('/pricing/analyse', data).then((r) => r.data),
   })
 

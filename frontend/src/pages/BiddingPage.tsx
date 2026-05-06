@@ -58,11 +58,6 @@ const STEP_COLORS = ['#1e40af', '#0369a1', '#0d9488', '#dc2626']
 export default function BiddingPage() {
   const { activePropertyId, activeBidSessionId, setActiveBidSession } = useSessionStore()
   const { aip, savings, isFirstTimeBuyer, setAip, setSavings } = useFinancialProfile()
-  // When a session is active, derive ceiling from the saved session values so
-  // editing the profile on FinancingPage doesn't silently rewrite an open session.
-  const sessionAip = (activeBidSessionId && session) ? (session.user_aip ?? aip) : aip
-  const sessionSavings = (activeBidSessionId && session) ? (session.user_savings ?? savings) : savings
-  const ceiling = buyerCeiling(sessionAip, sessionSavings, isFirstTimeBuyer)
 
   const [bidAmount, setBidAmount] = useState('')
   const [submittedBy, setSubmittedBy] = useState<'user' | 'other_buyer'>('user')
@@ -78,6 +73,13 @@ export default function BiddingPage() {
   const { data: offerBand } = useOfferBand(propertyId)
   const { data: comparables = [] } = useComparables(propertyId)
   const recordOutcome = useRecordOutcome(activeBidSessionId ?? '')
+
+  // Derive ceiling from saved session values when a session is active, so
+  // editing the profile on FinancingPage doesn't silently rewrite an open session.
+  // Must be computed after useBidSession so `session` is in scope.
+  const sessionAip = (activeBidSessionId && session) ? (session.user_aip ?? aip) : aip
+  const sessionSavings = (activeBidSessionId && session) ? (session.user_savings ?? savings) : savings
+  const ceiling = buyerCeiling(sessionAip, sessionSavings, isFirstTimeBuyer)
 
   // Require both AIP and savings — without savings we cannot apply LTV/closing-cost
   // caps, and the resulting strategy/ceiling would be unsafe.
