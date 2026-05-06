@@ -1,4 +1,5 @@
 """Synchronous single-URL ingestion: detect portal → scrape → upsert → best-effort embed."""
+
 from __future__ import annotations
 
 import os
@@ -137,8 +138,7 @@ async def _upsert_property(db: AsyncSession, prop_dict: dict) -> uuid.UUID:
 
     # On conflict: update mutable fields but preserve immutable identity fields
     update_values = {
-        k: v for k, v in insert_values.items()
-        if k not in ("id", "source", "source_id", "url")
+        k: v for k, v in insert_values.items() if k not in ("id", "source", "source_id", "url")
     }
     update_values["updated_at"] = now
 
@@ -162,37 +162,80 @@ async def _geocode_if_missing(db: AsyncSession, prop_id: uuid.UUID, address: str
         if result.scalar_one_or_none() is not None:
             return  # already geocoded
 
-        from geopy.geocoders import Nominatim  # noqa: PLC0415
+        import re as _re  # noqa: PLC0415
+
         from geopy.adapters import AioHTTPAdapter  # noqa: PLC0415
+        from geopy.geocoders import Nominatim  # noqa: PLC0415
         from sqlalchemy import update  # noqa: PLC0415
 
+        # Build progressively broader queries: full address → suburb → district
+        suburb_match = _re.search(
+            r",\s*([^,]+(?:Hill|Road|Avenue|Street|Lane|Park|Drive|Way|Court|Grove|Rise|Close)),",
+            address,
+        )
+        suburb = suburb_match.group(1).strip() if suburb_match else None
+        district_match = _re.search(r"\b(D\d{1,2}W?)\b", address.upper())
+        district_code = district_match.group(1) if district_match else None
+        queries = [
+            f"{address}, Dublin, Ireland",
+            *([f"{suburb}, Dublin, Ireland"] if suburb else []),
+            *([f"Dublin {district_code.lstrip('D')}, Ireland"] if district_code else []),
+            "Dublin, Ireland",
+        ]
+
+        location = None
         async with Nominatim(
             user_agent="property-sahi-signal",
             adapter_factory=AioHTTPAdapter,
         ) as geolocator:
-            location = await geolocator.geocode(f"{address}, Dublin, Ireland", timeout=10)
+            for q in queries:
+                location = await geolocator.geocode(q, timeout=10)
+                if location:
+                    break
 
         if location:
             # Derive Dublin district from eircode in address (e.g. "D24 RX99" → "D24")
-            import re  # noqa: PLC0415
             district = None
-            eircode_match = re.search(r"\b(D\d{1,2}W?)\b", address.upper())
+            eircode_match = _re.search(r"\b(D\d{1,2}W?)\b", address.upper())
             if eircode_match:
                 district_map = {
-                    "D1": "D1", "D2": "D2", "D4": "D4", "D6": "D6", "D6W": "D6W",
-                    "D7": "D7", "D8": "D8", "D9": "D9", "D10": "D10", "D11": "D11",
-                    "D12": "D12", "D14": "D14", "D15": "D15", "D16": "D16",
-                    "D18": "D18", "D20": "D20", "D22": "D22", "D24": "D24",
+                    "D1": "D1",
+                    "D2": "D2",
+                    "D4": "D4",
+                    "D6": "D6",
+                    "D6W": "D6W",
+                    "D7": "D7",
+                    "D8": "D8",
+                    "D9": "D9",
+                    "D10": "D10",
+                    "D11": "D11",
+                    "D12": "D12",
+                    "D14": "D14",
+                    "D15": "D15",
+                    "D16": "D16",
+                    "D18": "D18",
+                    "D20": "D20",
+                    "D22": "D22",
+                    "D24": "D24",
                 }
                 district = district_map.get(eircode_match.group(1))
 
             await db.execute(
                 update(Property)
                 .where(Property.id == prop_id)
-                .values(latitude=location.latitude, longitude=location.longitude, dublin_district=district)
+                .values(
+                    latitude=location.latitude,
+                    longitude=location.longitude,
+                    dublin_district=district,
+                )
             )
             await db.commit()
-            logger.info("url_ingest_geocoded", prop_id=str(prop_id), lat=location.latitude, lng=location.longitude)
+            logger.info(
+                "url_ingest_geocoded",
+                prop_id=str(prop_id),
+                lat=location.latitude,
+                lng=location.longitude,
+            )
     except Exception as exc:
         logger.warning("url_ingest_geocoding_skipped", prop_id=str(prop_id), error=str(exc))
 
