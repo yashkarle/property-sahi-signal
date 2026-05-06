@@ -128,13 +128,25 @@ export default function BiddingPage() {
   } catch { /* fall through */ }
 
   const chartData = (comparables as any[]).map((c) => ({
-    date: new Date(c.date_of_sale).getTime(),
+    date: new Date(c.date_of_sale + 'T12:00:00').getTime(), // noon UTC avoids timezone-shift by-1-day
     price: c.time_adjusted_price ?? c.price_eur,
     rawPrice: c.price_eur,
     address: c.address,
     distanceM: c.distance_m,
     monthsAgo: c.months_ago,
   }))
+
+  // Percentile stats computed from comparables — always fresh, no ML model required
+  const compStats = (() => {
+    const prices = (comparables as any[])
+      .map((c: any) => c.time_adjusted_price ?? c.price_eur)
+      .filter(Boolean)
+      .sort((a: number, b: number) => a - b)
+    if (!prices.length) return null
+    const pct = (p: number) => prices[Math.floor((prices.length - 1) * p)]
+    const mean = Math.round(prices.reduce((s: number, v: number) => s + v, 0) / prices.length)
+    return { p25: pct(0.25), median: pct(0.5), mean, p75: pct(0.75), count: prices.length }
+  })()
 
   const tickFormatter = (ts: number) =>
     new Date(ts).toLocaleDateString('en-IE', { month: 'short', year: '2-digit' })
@@ -395,14 +407,30 @@ export default function BiddingPage() {
             <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-center">
               <h3 className="text-sm font-bold text-gray-900">📈 Adjusted comparable sales</h3>
               <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
-                {comparables.length} sales · 1km · 18mo
+                {comparables.length} sales · 2km · 24mo
               </span>
             </div>
             <div className="p-4">
+              {compStats && (
+                <div className="grid grid-cols-4 gap-2 mb-3">
+                  {[
+                    { label: 'P25', value: compStats.p25 },
+                    { label: 'Median', value: compStats.median },
+                    { label: 'Mean', value: compStats.mean },
+                    { label: 'P75', value: compStats.p75 },
+                  ].map(({ label, value }) => (
+                    <div key={label} className="text-center bg-gray-50 rounded-lg py-1.5">
+                      <div className="text-[10px] text-gray-400 uppercase tracking-wide">{label}</div>
+                      <div className="text-xs font-semibold text-gray-800">{eur(value)}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
               <ResponsiveContainer width="100%" height={200}>
                 <ScatterChart margin={{ top: 10, right: 20, bottom: 20, left: 10 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                  <XAxis dataKey="date" type="number" scale="time" domain={['auto', 'auto']}
+                  <XAxis dataKey="date" type="number" scale="time"
+                    domain={[(d: number) => d - 30 * 86400000, (d: number) => d + 30 * 86400000]}
                     tickFormatter={tickFormatter} tick={{ fontSize: 10 }} tickLine={false} />
                   <YAxis dataKey="price" type="number"
                     tickFormatter={(v) => `€${Math.round(v / 1000)}k`}
@@ -414,15 +442,15 @@ export default function BiddingPage() {
                       return (
                         <div className="bg-white border border-gray-200 rounded-lg p-2 text-xs shadow-lg max-w-[200px]">
                           <div className="font-semibold text-gray-900 mb-1 truncate">{d.address}</div>
-                          <div className="text-gray-600">Price: {eur(d.rawPrice)}</div>
+                          <div className="text-gray-600">Sale: {eur(d.rawPrice)}</div>
                           <div className="text-gray-600">Adjusted: {eur(d.price)}</div>
                           <div className="text-gray-400">{d.monthsAgo.toFixed(1)}mo ago · {Math.round(d.distanceM)}m away</div>
                         </div>
                       )
                     }}
                   />
-                  {offerBand?.p25 && offerBand?.p75 && (
-                    <ReferenceArea y1={offerBand.p25} y2={offerBand.p75}
+                  {compStats && (
+                    <ReferenceArea y1={compStats.p25} y2={compStats.p75}
                       fill="#10b981" fillOpacity={0.06}
                       stroke="#10b981" strokeOpacity={0.3} strokeWidth={1} />
                   )}
@@ -453,13 +481,13 @@ export default function BiddingPage() {
                   P25–P75
                 </div>
               </div>
-              {offerBand?.p25 && ceiling > 0 && (
+              {compStats && ceiling > 0 && (
                 <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg text-xs text-green-800">
                   <strong>Key insight: </strong>
-                  Your ceiling ({eur(ceiling)}) sits {ceiling >= offerBand.p25 ? 'above' : 'below'} P25 ({eur(offerBand.p25)})
-                  {ceiling < (offerBand.p50 ?? Infinity) ? ` and below P50 (${eur(offerBand.p50)})` : ''}.
-                  {ceiling < (offerBand.entry ?? 0)
-                    ? ` Market entry (${eur(offerBand.entry)}) exceeds your ceiling — bid at ceiling as your Best & Final in round 1.`
+                  Your ceiling ({eur(ceiling)}) sits {ceiling >= compStats.p25 ? 'above' : 'below'} P25 ({eur(compStats.p25)})
+                  {ceiling < compStats.median ? ` and below median (${eur(compStats.median)})` : ` and above median (${eur(compStats.median)})`}.
+                  {ceiling < (offerBand?.entry ?? 0)
+                    ? ` Market entry (${eur(offerBand!.entry)}) exceeds your ceiling — bid at ceiling as your Best & Final in round 1.`
                     : ' You are competitive in this price range.'}
                 </div>
               )}
@@ -476,7 +504,7 @@ export default function BiddingPage() {
             <div style={{ height: 280 }}>
               <MapContainer
                 center={mapCenter}
-                zoom={14}
+                zoom={13}
                 style={{ height: '100%', width: '100%' }}
                 scrollWheelZoom={false}
               >
