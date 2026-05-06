@@ -1,4 +1,5 @@
 """Synchronous single-URL ingestion: detect portal → scrape → upsert → best-effort embed."""
+
 from __future__ import annotations
 
 import os
@@ -80,6 +81,9 @@ async def ingest_from_url(url: str, db: AsyncSession) -> Property:
     prop_dict = parse_listing(listing)
     prop_id = await _upsert_property(db, prop_dict)
 
+    # Best-effort geocoding — needed for pricing model comparables
+    await _geocode_if_missing(db, prop_id, prop_dict.get("address", ""))
+
     # Best-effort: never 500 on embedding failure
     await _enrich_embedding(prop_id, prop_dict)
 
@@ -134,8 +138,7 @@ async def _upsert_property(db: AsyncSession, prop_dict: dict) -> uuid.UUID:
 
     # On conflict: update mutable fields but preserve immutable identity fields
     update_values = {
-        k: v for k, v in insert_values.items()
-        if k not in ("id", "source", "source_id", "url")
+        k: v for k, v in insert_values.items() if k not in ("id", "source", "source_id", "url")
     }
     update_values["updated_at"] = now
 
@@ -148,6 +151,97 @@ async def _upsert_property(db: AsyncSession, prop_dict: dict) -> uuid.UUID:
     result = await db.execute(stmt)
     await db.commit()
     return result.scalar_one()
+
+
+async def _geocode_if_missing(db: AsyncSession, prop_id: uuid.UUID, address: str) -> None:
+    """Geocode address and update lat/lng if not already set. Uses Nominatim (free)."""
+    if not address:
+        return
+    try:
+        result = await db.execute(select(Property.latitude).where(Property.id == prop_id))
+        if result.scalar_one_or_none() is not None:
+            return  # already geocoded
+
+        import re as _re  # noqa: PLC0415
+
+        from geopy.adapters import AioHTTPAdapter  # noqa: PLC0415
+        from geopy.geocoders import Nominatim  # noqa: PLC0415
+        from sqlalchemy import update  # noqa: PLC0415
+
+        # Strip trailing eircode (e.g. "D24 Y161") before passing to Nominatim —
+        # the full eircode confuses the geocoder and produces a wrong location.
+        clean_address = _re.sub(r",?\s*[A-Z]\d{2}\s+[A-Z0-9]{4}\s*$", "", address).strip()
+
+        # Build progressively broader queries: cleaned full address → suburb → district
+        suburb_match = _re.search(
+            r",\s*([^,]+(?:Hill|Road|Avenue|Street|Lane|Park|Drive|Way|Court|Grove|Rise|Close|Place|Hall)),",
+            clean_address,
+        )
+        suburb = suburb_match.group(1).strip() if suburb_match else None
+        district_match = _re.search(r"\b(D\d{1,2}W?)\b", clean_address.upper())
+        district_code = district_match.group(1) if district_match else None
+        queries = [
+            f"{clean_address}, Dublin, Ireland",
+            *([f"{suburb}, Dublin, Ireland"] if suburb else []),
+            *([f"Dublin {district_code.lstrip('D')}, Ireland"] if district_code else []),
+            "Dublin, Ireland",
+        ]
+
+        location = None
+        async with Nominatim(
+            user_agent="property-sahi-signal",
+            adapter_factory=AioHTTPAdapter,
+        ) as geolocator:
+            for q in queries:
+                location = await geolocator.geocode(q, timeout=10)
+                if location:
+                    break
+
+        if location:
+            # Derive Dublin district from eircode in address (e.g. "D24 RX99" → "D24")
+            district = None
+            eircode_match = _re.search(r"\b(D\d{1,2}W?)\b", address.upper())
+            if eircode_match:
+                district_map = {
+                    "D1": "D1",
+                    "D2": "D2",
+                    "D4": "D4",
+                    "D6": "D6",
+                    "D6W": "D6W",
+                    "D7": "D7",
+                    "D8": "D8",
+                    "D9": "D9",
+                    "D10": "D10",
+                    "D11": "D11",
+                    "D12": "D12",
+                    "D14": "D14",
+                    "D15": "D15",
+                    "D16": "D16",
+                    "D18": "D18",
+                    "D20": "D20",
+                    "D22": "D22",
+                    "D24": "D24",
+                }
+                district = district_map.get(eircode_match.group(1))
+
+            await db.execute(
+                update(Property)
+                .where(Property.id == prop_id)
+                .values(
+                    latitude=location.latitude,
+                    longitude=location.longitude,
+                    dublin_district=district,
+                )
+            )
+            await db.commit()
+            logger.info(
+                "url_ingest_geocoded",
+                prop_id=str(prop_id),
+                lat=location.latitude,
+                lng=location.longitude,
+            )
+    except Exception as exc:
+        logger.warning("url_ingest_geocoding_skipped", prop_id=str(prop_id), error=str(exc))
 
 
 async def _enrich_embedding(prop_id: uuid.UUID, prop_dict: dict) -> None:

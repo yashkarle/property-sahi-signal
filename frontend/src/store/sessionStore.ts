@@ -10,6 +10,6 @@ interface SessionStore {
 export const useSessionStore = create<SessionStore>((set) => ({
   activePropertyId: null,
   activeBidSessionId: null,
-  setActiveProperty: (id) => set({ activePropertyId: id }),
+  setActiveProperty: (id) => set({ activePropertyId: id, activeBidSessionId: null }),
   setActiveBidSession: (id) => set({ activeBidSessionId: id }),
 }))

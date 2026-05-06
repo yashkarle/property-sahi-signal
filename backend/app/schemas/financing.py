@@ -11,9 +11,9 @@ class ClosingCosts(BaseModel):
     @classmethod
     def calculate(cls, price: int) -> "ClosingCosts":
         stamp_duty = round(price * 0.01)
-        solicitor = 2500
-        surveyor = 500
-        valuation = 150
+        solicitor = 2500   # solicitor + land registry
+        surveyor = 1000    # structural survey
+        valuation = 1000   # bank valuation + land registry fees
         return cls(
             stamp_duty=stamp_duty,
             solicitor_fee=solicitor,

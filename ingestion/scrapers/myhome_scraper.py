@@ -1,6 +1,7 @@
 """MyHome.ie Playwright scraper for single property listings."""
 from __future__ import annotations
 
+import json
 import re
 
 from bs4 import BeautifulSoup
@@ -46,9 +47,27 @@ def parse_myhome_listing_html(html: str, url: str) -> ListingData | None:
     area_match = re.search(r"(\d+)\s*(?:sq\.?\s*m|sqm|m²)", html, re.IGNORECASE)
     carpet_area_sqm = int(area_match.group(1)) if area_match else None
 
-    # BER — try class selector, fall back to text regex
-    ber_el = soup.find(class_=re.compile(r"EnergyRating|BerRating|ber", re.I))
-    ber_raw = ber_el.get_text(strip=True).upper() if ber_el else None
+    # BER — primary: LD+JSON schema.org description contains "(rated C1)" pattern
+    ber_raw = None
+    for script in soup.find_all("script", type="application/ld+json"):
+        try:
+            data = json.loads(script.string or "")
+            desc = data.get("description", "")
+            rated_match = re.search(r"\(rated\s+([A-G]\d?)\)", desc, re.IGNORECASE)
+            if rated_match:
+                ber_raw = rated_match.group(1).upper()
+                break
+        except (json.JSONDecodeError, AttributeError):
+            pass
+    # Fallback: dedicated EnergyRating element (older MyHome markup)
+    if not ber_raw:
+        rating_el = soup.find(class_=re.compile(r"EnergyRating", re.I))
+        if rating_el:
+            txt = rating_el.get_text(strip=True)
+            m = re.search(r"\b([A-G]\d?)\b", txt)
+            if m:
+                ber_raw = m.group(1).upper()
+    # Fallback: plain-text BER label in the HTML body
     if not ber_raw:
         ber_match = re.search(r"BER[:\s]+([A-G]\d?)", html, re.IGNORECASE)
         ber_raw = ber_match.group(1).upper() if ber_match else None

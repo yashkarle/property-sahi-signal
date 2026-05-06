@@ -29,6 +29,9 @@ class BidSession(Base):
     )
     status: Mapped[str] = mapped_column(BidSessionStatusEnum, default="active", index=True)
     user_max_budget: Mapped[int | None] = mapped_column(Integer)
+    user_aip: Mapped[int | None] = mapped_column(Integer)
+    user_savings: Mapped[int | None] = mapped_column(Integer)
+    actual_sale_price: Mapped[int | None] = mapped_column(Integer)
     strategy_advice: Mapped[str | None] = mapped_column(Text)
 
     property: Mapped["Property"] = relationship(  # noqa: F821

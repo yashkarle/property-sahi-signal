@@ -6,12 +6,14 @@ import BiddingPage from './pages/BiddingPage'
 import FinancingPage from './pages/FinancingPage'
 import ProfessionalsPage from './pages/ProfessionalsPage'
 import ComparisonPage from './pages/ComparisonPage'
+import BidHistoryPage from './pages/BidHistoryPage'
 import { useComparisonStore } from './store/comparisonStore'
 
 const navItems = [
   { to: '/', label: 'Search', emoji: '🔍' },
   { to: '/viewing', label: 'Viewing', emoji: '🏠' },
   { to: '/bidding', label: 'Bidding', emoji: '⚡' },
+  { to: '/bid-history', label: 'History', emoji: '📋' },
   { to: '/financing', label: 'Financing', emoji: '💶' },
   { to: '/professionals', label: 'Solicitors', emoji: '⚖️' },
 ]
@@ -63,6 +65,7 @@ export default function App() {
             <Route path="/property/:id" element={<PropertyDetailPage />} />
             <Route path="/viewing" element={<ViewingPrepPage />} />
             <Route path="/bidding" element={<BiddingPage />} />
+            <Route path="/bid-history" element={<BidHistoryPage />} />
             <Route path="/financing" element={<FinancingPage />} />
             <Route path="/professionals" element={<ProfessionalsPage />} />
             <Route path="/compare" element={<ComparisonPage />} />

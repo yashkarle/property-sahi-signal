@@ -5,9 +5,11 @@ from app.schemas.financing import ClosingCosts, FinancingInputs, FinancingScenar
 
 def simulate_financing(inputs: FinancingInputs) -> FinancingSimulationResponse:
     closing = ClosingCosts.calculate(inputs.property_price)
+    # Central Bank LTV: FTB → 90% mortgage (10% min deposit), non-FTB → 80% (20% min deposit)
+    min_deposit_pct = 0.10 if inputs.is_first_time_buyer else 0.20
     deposit_required = max(
         inputs.property_price - inputs.aip_amount,
-        round(inputs.property_price * 0.10),
+        round(inputs.property_price * min_deposit_pct),
     )
     total_needed = deposit_required + closing.total
 

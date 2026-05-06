@@ -209,3 +209,10 @@ __marimo__/
 # fronend node
 /frontend/node_modules/
 /frontend/dist/
+frontend/.vite/
+*.tsbuildinfo
+
+.superpowers/brainstorm/
+
+# Raw PPR CSVs — large, downloaded via scripts
+data/
