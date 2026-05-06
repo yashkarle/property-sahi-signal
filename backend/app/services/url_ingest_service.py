@@ -168,16 +168,20 @@ async def _geocode_if_missing(db: AsyncSession, prop_id: uuid.UUID, address: str
         from geopy.geocoders import Nominatim  # noqa: PLC0415
         from sqlalchemy import update  # noqa: PLC0415
 
-        # Build progressively broader queries: full address → suburb → district
+        # Strip trailing eircode (e.g. "D24 Y161") before passing to Nominatim —
+        # the full eircode confuses the geocoder and produces a wrong location.
+        clean_address = _re.sub(r",?\s*[A-Z]\d{2}\s+[A-Z0-9]{4}\s*$", "", address).strip()
+
+        # Build progressively broader queries: cleaned full address → suburb → district
         suburb_match = _re.search(
-            r",\s*([^,]+(?:Hill|Road|Avenue|Street|Lane|Park|Drive|Way|Court|Grove|Rise|Close)),",
-            address,
+            r",\s*([^,]+(?:Hill|Road|Avenue|Street|Lane|Park|Drive|Way|Court|Grove|Rise|Close|Place|Hall)),",
+            clean_address,
         )
         suburb = suburb_match.group(1).strip() if suburb_match else None
-        district_match = _re.search(r"\b(D\d{1,2}W?)\b", address.upper())
+        district_match = _re.search(r"\b(D\d{1,2}W?)\b", clean_address.upper())
         district_code = district_match.group(1) if district_match else None
         queries = [
-            f"{address}, Dublin, Ireland",
+            f"{clean_address}, Dublin, Ireland",
             *([f"{suburb}, Dublin, Ireland"] if suburb else []),
             *([f"Dublin {district_code.lstrip('D')}, Ireland"] if district_code else []),
             "Dublin, Ireland",
