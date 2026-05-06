@@ -151,6 +151,22 @@ export default function BiddingPage() {
   const tickFormatter = (ts: number) =>
     new Date(ts).toLocaleDateString('en-IE', { month: 'short', year: '2-digit' })
 
+  // Explicit quarterly tick positions so Recharts doesn't guess badly
+  const quarterTicks = (() => {
+    if (!chartData.length) return []
+    const minTs = Math.min(...chartData.map((d: any) => d.date))
+    const maxTs = Math.max(...chartData.map((d: any) => d.date))
+    const ticks: number[] = []
+    const d = new Date(minTs)
+    d.setDate(1)
+    d.setMonth(Math.floor(d.getMonth() / 3) * 3) // snap to quarter start
+    while (d.getTime() <= maxTs + 30 * 86400000) {
+      ticks.push(d.getTime())
+      d.setMonth(d.getMonth() + 3)
+    }
+    return ticks
+  })()
+
   const now = Date.now()
   const sixMonthsAgo = now - 6 * 30 * 24 * 60 * 60 * 1000
   const dotColor = (d: any) => {
@@ -429,8 +445,9 @@ export default function BiddingPage() {
               <ResponsiveContainer width="100%" height={200}>
                 <ScatterChart margin={{ top: 10, right: 20, bottom: 20, left: 10 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                  <XAxis dataKey="date" type="number" scale="time"
-                    domain={[(d: number) => d - 30 * 86400000, (d: number) => d + 30 * 86400000]}
+                  <XAxis dataKey="date" type="number"
+                    domain={['dataMin', 'dataMax']}
+                    ticks={quarterTicks}
                     tickFormatter={tickFormatter} tick={{ fontSize: 10 }} tickLine={false} />
                   <YAxis dataKey="price" type="number"
                     tickFormatter={(v) => `€${Math.round(v / 1000)}k`}
