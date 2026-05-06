@@ -149,14 +149,18 @@ export default function BiddingPage() {
 
   const compLats = (comparables as any[]).filter((c) => c.latitude && c.longitude)
 
-  // Center the map on the centroid of all geocoded comparables (they are within 1km
-  // of the subject property, so the centroid is a good proxy for the property location).
-  const mapCenter: [number, number] = compLats.length > 0
-    ? [
-        compLats.reduce((s: number, c: any) => s + c.latitude, 0) / compLats.length,
-        compLats.reduce((s: number, c: any) => s + c.longitude, 0) / compLats.length,
-      ]
-    : [53.3498, -6.2603]
+  // Use the subject property's own coords (from offer-band) as map center.
+  // Fall back to Dublin city centre only if neither is available.
+  const propLat: number | null = (offerBand as any)?.property_lat ?? null
+  const propLng: number | null = (offerBand as any)?.property_lng ?? null
+  const mapCenter: [number, number] = propLat && propLng
+    ? [propLat, propLng]
+    : compLats.length > 0
+      ? [
+          compLats.reduce((s: number, c: any) => s + c.latitude, 0) / compLats.length,
+          compLats.reduce((s: number, c: any) => s + c.longitude, 0) / compLats.length,
+        ]
+      : [53.3498, -6.2603]
 
   return (
     <div className="flex h-full overflow-hidden">
@@ -466,8 +470,8 @@ export default function BiddingPage() {
         {compLats.length > 0 && (
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
             <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-center">
-              <h3 className="text-sm font-bold text-gray-900">🗺 Comparable sales map</h3>
-              <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">1km radius</span>
+              <h3 className="text-sm font-bold text-gray-900">Comparable sales map</h3>
+              <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">2km · 24 months</span>
             </div>
             <div style={{ height: 280 }}>
               <MapContainer
@@ -482,12 +486,22 @@ export default function BiddingPage() {
                 />
                 <Circle
                   center={mapCenter}
-                  radius={1000}
+                  radius={2000}
                   pathOptions={{ color: '#64748b', fill: false, dashArray: '6 4', weight: 1, opacity: 0.4 }}
                 />
+                {/* Subject property pin — red star-like marker */}
+                {propLat && propLng && (
+                  <CircleMarker
+                    center={[propLat, propLng]}
+                    radius={9}
+                    pathOptions={{ color: '#dc2626', fillColor: '#dc2626', fillOpacity: 1, weight: 2 }}
+                  >
+                    <Popup>
+                      <div className="text-xs font-semibold text-red-700">This property</div>
+                    </Popup>
+                  </CircleMarker>
+                )}
                 {compLats.map((c: any, i: number) => {
-                  // Use time-adjusted price for colouring (same as the scatter chart) so
-                  // both views agree about which comparables are within the buyer's ceiling.
                   const compPrice = c.time_adjusted_price ?? c.price_eur
                   const isRecent = c.months_ago < 6
                   const isInBudget = compPrice <= (ceiling || Infinity)
